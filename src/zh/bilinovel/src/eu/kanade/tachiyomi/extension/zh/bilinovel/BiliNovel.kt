@@ -4,6 +4,7 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
 import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
+import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -24,19 +25,15 @@ import java.util.Locale
 import kotlin.math.floor
 
 class BiliNovel : HttpSource(), ConfigurableSource {
-
     override val baseUrl = "https://www.bilinovel.com"
-
     override val lang = "zh"
-
     override val name = "哔哩轻小说"
-
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()
 
     override val client = super.client.newBuilder().addInterceptor(TextInterceptor())
-        .addNetworkInterceptor(NovelInterceptor()).build()
+        .rateLimit(10, 10).addNetworkInterceptor(NovelInterceptor()).build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -177,11 +174,11 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val doc = response.asJsoup()
         val meta = doc.select(".book-meta")[1].text().split("|")
-        val backupname = doc.selectFirst(".bkname-body")?.let { "\n\n別名：${it.text()}" } ?: ""
+        val backupname = doc.selectFirst(".bkname-body")?.let { "別名：${it.text()}\n\n" } ?: ""
         setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
-        description = doc.selectFirst("#bookSummary > content")?.wholeText() + backupname
+        description = backupname + doc.selectFirst("#bookSummary > content")?.wholeText()
         author = doc.selectFirst(".authorname")?.text()
         status = when (meta.getOrNull(1)) {
             "连载" -> SManga.ONGOING

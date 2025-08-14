@@ -32,6 +32,12 @@ class NovelInterceptor : Interceptor {
         else -> "/novel/0/0.html"
     }
 
+    private fun checkPC(response: Response) {
+        if (response.isRedirect && response.header("Location")?.indexOf("linovelib") != -1) {
+            throw Exception("不支持电脑端查看，请在“更多-设置-高级”中更换手机端UA标识")
+        }
+    }
+
     override fun intercept(chain: Interceptor.Chain): Response {
         val origin = chain.request()
         regexOf(origin.url.fragment)?.let {
@@ -43,5 +49,6 @@ class NovelInterceptor : Interceptor {
                 .header("Location", url.replace(".", "_2.")).build()
         }
         return chain.proceed(origin.newBuilder().addHeader("Cookie", "night=1").build())
+            .also(::checkPC)
     }
 }
