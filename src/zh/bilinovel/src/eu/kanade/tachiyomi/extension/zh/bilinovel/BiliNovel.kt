@@ -18,6 +18,7 @@ import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
+import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
@@ -52,12 +53,28 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     }
 
     companion object {
-        const val PAGE_SIZE = 50
         val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
+        val PAGE_REGEX = Regex("第(\\d+)/(\\d+)页")
         val MANGA_ID_REGEX = Regex("/novel/(\\d+)\\.html")
         val CHAPTER_ID_REGEX = Regex("/novel/\\d+/(\\d+)(?:_\\d+)?\\.html")
         val PAGE_SIZE_REGEX = Regex("（\\d+/(\\d+)）")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
+    }
+
+    private fun hasNextPage(doc: Document, size: Int): Boolean {
+        val url = doc.location()
+        return when {
+            url.contains("wenku") -> {
+                val total = doc.selectFirst("#pagelink > .last")!!.text().toInt()
+                val cur = doc.selectFirst("#pagelink > strong")!!.text().toInt()
+                cur < total
+            }
+            url.contains("search") -> {
+                val find = PAGE_REGEX.find(doc.selectFirst("#pagelink > span")!!.text())!!
+                find.groups[1]!!.value.toInt() < find.groups[1]!!.value.toInt()
+            }
+            else -> size == 50
+        }
     }
 
     private fun getChapterUrlByContext(i: Int, els: Elements) = when (i) {
@@ -128,8 +145,8 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         return GET(baseUrl + String.format(suffix, page), headers)
     }
 
-    override fun popularMangaParse(response: Response) = response.asJsoup().let {
-        val mangas = it.select(".book-layout").map {
+    override fun popularMangaParse(response: Response) = response.asJsoup().let { doc ->
+        val mangas = doc.select(".book-layout").map {
             SManga.create().apply {
                 setUrlWithoutDomain(it.absUrl("href"))
                 val img = it.selectFirst("img")!!
@@ -137,7 +154,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
                 title = img.attr("alt")
             }
         }
-        MangasPage(mangas, mangas.size >= PAGE_SIZE)
+        MangasPage(mangas, hasNextPage(doc, mangas.size))
     }
 
     // Latest Page
@@ -156,8 +173,8 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         if (query.isNotBlank()) {
             url.addPathSegment("search").addPathSegment("${query}_$page.html")
         } else {
-            url.addPathSegment("top").addPathSegment(filters[1].toString())
-                .addPathSegment("$page.html")
+            url.addPathSegment("wenku")
+                .addPathSegment("${filters[3]}_${filters[2]}_${filters[6]}_${filters[4]}_${filters[1]}_0_0_${filters[5]}_${page}_0.html")
         }
         return GET(url.build(), headers)
     }
@@ -174,19 +191,18 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val doc = response.asJsoup()
         val meta = doc.select(".book-meta")[1].text().split("|")
-        val backupname = doc.selectFirst(".bkname-body")?.let { "別名：${it.text()}\n\n" } ?: ""
+        val backupname = doc.selectFirst(".bkname-body")?.let { "【別名：${it.text()}】\n\n" } ?: ""
         setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
-        description = backupname + doc.selectFirst("#bookSummary > content")?.wholeText()
+        description = backupname + doc.selectFirst("#bookSummary > content")?.wholeText()?.trim()
         author = doc.selectFirst(".authorname")?.text()
         status = when (meta.getOrNull(1)) {
             "连载" -> SManga.ONGOING
             "完结" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        genre =
-            (doc.select(".tag-small").map(Element::text) + meta.getOrElse(2) { "" }).joinToString()
+        genre = (doc.select(".tag-small").map(Element::text) + meta.getOrElse(2) { "" }).joinToString()
         initialized = true
     }
 
