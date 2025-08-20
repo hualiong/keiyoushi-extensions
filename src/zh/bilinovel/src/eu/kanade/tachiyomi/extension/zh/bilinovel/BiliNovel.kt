@@ -1,8 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.bilinovel
 
 import androidx.preference.PreferenceScreen
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptor
-import eu.kanade.tachiyomi.lib.textinterceptor.TextInterceptorHelper
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
@@ -33,7 +31,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
 
     private val preferences by getPreferencesLazy()
 
-    override val client = super.client.newBuilder().addInterceptor(TextInterceptor())
+    override val client = super.client.newBuilder().addInterceptor(HtmlInterceptor(baseUrl))
         .rateLimit(10, 10).addNetworkInterceptor(NovelInterceptor()).build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -87,9 +85,16 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         val seed = chapterId * 135 + 236
 
         // 2. 获取所有子节点（包括文本节点等）
-        val childNodes = content.children().filterNot {
-            it.tagName() == "img"
-        }.toMutableList()
+        val childNodes = content.children().toMutableList().also {
+            it.removeIf { e ->
+                e.tagName() != "img" && e.tagName() != "p"
+            }
+            it.forEachIndexed { i, e ->
+                if (e.tagName() == "img" && e.hasAttr("data-src")) {
+                    it[i] = e.attr("src", e.attr("data-src"))
+                }
+            }
+        }
 
         // 3. 过滤出有效的<p>元素节点
         val paragraphs = childNodes.filter {
@@ -125,14 +130,16 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         }.map { it!! } // 转换为非空列表
 
         // 7. 替换原始节点中的<p>元素
-        // var paraIndex = 0
-        // for (i in 0..paragraphs.size) {
-        //     paragraphs[i] = shuffled[paraIndex++]
-        // }
+        var paraIndex = 0
+        childNodes.forEachIndexed { i, e ->
+            if (e.tagName() == "p" && e.text().trim().isNotBlank()) {
+                childNodes[i] = shuffled[paraIndex++]
+            }
+        }
 
         // 8. 清空并重新添加处理后的节点
         content.html("")
-        content.appendChildren(shuffled)
+        content.appendChildren(childNodes)
 
         // 9. 返回最终HTML
         return content.html()
@@ -244,9 +251,10 @@ class BiliNovel : HttpSource(), ConfigurableSource {
 
     // Image
 
-    override fun imageUrlParse(response: Response) = response.asJsoup().let {
-        val content = it.selectFirst("#acontent")!!
-        val chapterId = CHAPTER_ID_REGEX.find(it.location())!!.groups[1]!!.value
-        TextInterceptorHelper.createUrl("", handleContent(content, chapterId.toInt()))
+    override fun imageUrlParse(response: Response) = response.asJsoup().let { doc ->
+        val title = doc.selectFirst("#atitle")?.html()?.takeIf { it.indexOf("/") < 0 }
+        val content = doc.selectFirst("#acontent")!!
+        val chapterId = CHAPTER_ID_REGEX.find(doc.location())!!.groups[1]!!.value
+        HtmlInterceptorHelper.createUrl(title ?: "", handleContent(content, chapterId.toInt()))
     }
 }
