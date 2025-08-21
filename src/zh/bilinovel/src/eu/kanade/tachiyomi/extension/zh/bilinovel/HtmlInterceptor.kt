@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit
 private const val WIDTH: Int = 1000
 private const val X_PADDING: Float = 50f
 private const val Y_PADDING: Float = 30f
-private const val HEADING_FONT_SIZE: Float = 56f
+private const val HEADING_FONT_SIZE: Float = 52f
 private const val BODY_FONT_SIZE: Float = 30f
 private const val SPACING_MULT: Float = 1.0f
 private const val SPACING_ADD: Float = 10f
@@ -75,7 +75,7 @@ class HtmlInterceptor(private val baseUrl: String) : Interceptor {
                 Layout.Alignment.ALIGN_CENTER,
                 SPACING_MULT,
                 SPACING_ADD,
-                true,
+                false,
             )
         }
 
@@ -97,7 +97,7 @@ class HtmlInterceptor(private val baseUrl: String) : Interceptor {
                 }
 
                 // 设置超时时间，避免无限等待
-                if (!latch.await(25, TimeUnit.SECONDS)) {
+                if (!latch.await(30, TimeUnit.SECONDS)) {
                     Log.w("TextInterceptor", "Timeout waiting for images to load")
                 }
             }
@@ -115,30 +115,30 @@ class HtmlInterceptor(private val baseUrl: String) : Interceptor {
                 Layout.Alignment.ALIGN_NORMAL,
                 SPACING_MULT,
                 SPACING_ADD,
-                true,
+                false,
             )
         }
 
         // Image building
-        val headingHeight = heading?.height ?: 0
+        val headingHeight = heading?.height?.plus(Y_PADDING * 2 + DIVIDER_HEIGHT + DIVIDER_MARGIN * 2) ?: 0f
         val bodyHeight = body?.height ?: 0
-        val imgHeight: Int = (headingHeight + bodyHeight + 2 * Y_PADDING).toInt()
-        val bitmap: Bitmap = Bitmap.createBitmap(WIDTH, imgHeight, Bitmap.Config.ARGB_8888)
+        val imgHeight = (headingHeight + bodyHeight).toInt()
+        val bitmap = Bitmap.createBitmap(WIDTH, imgHeight, Bitmap.Config.ARGB_8888)
 
         Canvas(bitmap).apply {
             drawColor(BG_COLOR)
-            heading?.draw(this, X_PADDING, Y_PADDING)
-
-            // 绘制标题下方的分割线
-            val dividerY = Y_PADDING + headingHeight + DIVIDER_MARGIN
-            val paint = Paint().apply {
-                color = DIVIDER_COLOR
-                strokeWidth = DIVIDER_HEIGHT
+            heading?.let {
+                it.draw(this, X_PADDING, Y_PADDING * 2)
+                // 绘制标题下方的分割线
+                val dividerY = heading.height + Y_PADDING * 2 + DIVIDER_MARGIN
+                val paint = Paint().apply {
+                    color = DIVIDER_COLOR
+                    strokeWidth = DIVIDER_HEIGHT
+                }
+                drawLine(X_PADDING, dividerY, WIDTH - X_PADDING, dividerY, paint)
             }
-            drawLine(X_PADDING, dividerY, WIDTH - X_PADDING, dividerY, paint)
-
             // 调整正文位置，考虑分割线的高度和间距
-            body?.draw(this, X_PADDING, dividerY + DIVIDER_HEIGHT + DIVIDER_MARGIN)
+            body?.draw(this, X_PADDING, headingHeight)
         }
 
         // Image converting & returning

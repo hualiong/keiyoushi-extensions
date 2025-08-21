@@ -87,7 +87,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         // 2. 获取所有子节点（包括文本节点等）
         val childNodes = content.children().toMutableList().also {
             it.removeIf { e ->
-                e.tagName() != "img" && e.tagName() != "p"
+                e.tagName() != "img" && (e.tagName() != "p" || e.text().trim().isBlank())
             }
             it.forEachIndexed { i, e ->
                 if (e.tagName() == "img" && e.hasAttr("data-src")) {
@@ -97,9 +97,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         }
 
         // 3. 过滤出有效的<p>元素节点
-        val paragraphs = childNodes.filter {
-            it.tagName() == "p" && it.text().trim().isNotBlank()
-        }.toMutableList()
+        val paragraphs = childNodes.filter { it.tagName() == "p" }.toMutableList()
 
         // 5. 创建排列数组
         val n = paragraphs.size
@@ -132,7 +130,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         // 7. 替换原始节点中的<p>元素
         var paraIndex = 0
         childNodes.forEachIndexed { i, e ->
-            if (e.tagName() == "p" && e.text().trim().isNotBlank()) {
+            if (e.tagName() == "p") {
                 childNodes[i] = shuffled[paraIndex++]
             }
         }
