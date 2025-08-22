@@ -31,7 +31,8 @@ class BiliNovel : HttpSource(), ConfigurableSource {
 
     private val preferences by getPreferencesLazy()
 
-    override val client = super.client.newBuilder().addInterceptor(HtmlInterceptor(baseUrl))
+    override val client = super.client.newBuilder()
+        .addInterceptor(HtmlInterceptor(baseUrl, preferences))
         .rateLimit(10, 10).addNetworkInterceptor(NovelInterceptor()).build()
 
     override fun headersBuilder() = super.headersBuilder()
@@ -40,7 +41,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         .add("Accept", "*/*")
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        preferencesInternal(screen.context).forEach(screen::addPreference)
+        preferencesInternal(screen.context, preferences).forEach(screen::addPreference)
     }
 
     // Customize
@@ -67,10 +68,12 @@ class BiliNovel : HttpSource(), ConfigurableSource {
                 val cur = doc.selectFirst("#pagelink > strong")!!.text().toInt()
                 cur < total
             }
+
             url.contains("search") -> {
                 val find = PAGE_REGEX.find(doc.selectFirst("#pagelink > span")!!.text())!!
                 find.groups[1]!!.value.toInt() < find.groups[1]!!.value.toInt()
             }
+
             else -> size == 50
         }
     }
@@ -146,7 +149,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     // Popular Page
 
     override fun popularMangaRequest(page: Int): Request {
-        val suffix = preferences.getString(PREF_POPULAR_MANGA_DISPLAY, "/top/weekvisit/%d.html")!!
+        val suffix = preferences.getString(PREF_POPULAR_DISPLAY, "/top/weekvisit/%d.html")!!
         return GET(baseUrl + String.format(suffix, page), headers)
     }
 
@@ -196,18 +199,20 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     override fun mangaDetailsParse(response: Response) = SManga.create().apply {
         val doc = response.asJsoup()
         val meta = doc.select(".book-meta")[1].text().split("|")
-        val backupname = doc.selectFirst(".bkname-body")?.let { "【別名：${it.text()}】\n\n" } ?: ""
+        val bkname =
+            doc.selectFirst(".bkname-body")?.let { "**別名**：${it.text()}\n\n---\n\n" } ?: ""
         setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
-        description = backupname + doc.selectFirst("#bookSummary > content")?.wholeText()?.trim()
+        description = bkname + doc.selectFirst("#bookSummary > content")?.wholeText()?.trim()
         author = doc.selectFirst(".authorname")?.text()
         status = when (meta.getOrNull(1)) {
             "连载" -> SManga.ONGOING
             "完结" -> SManga.COMPLETED
             else -> SManga.UNKNOWN
         }
-        genre = (doc.select(".tag-small").map(Element::text) + meta.getOrElse(2) { "" }).joinToString()
+        genre =
+            (doc.select(".tag-small").map(Element::text) + meta.getOrElse(2) { "" }).joinToString()
         initialized = true
     }
 
@@ -239,9 +244,10 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     override fun pageListRequest(chapter: SChapter) =
         GET(baseUrl + chapter.url.replace(".", "_2."), headers)
 
-    override fun pageListParse(response: Response) = response.asJsoup().let {
-        val size = PAGE_SIZE_REGEX.find(it.selectFirst("#atitle")!!.text())!!.groups[1]!!.value
-        val prefix = it.location().substringBeforeLast("_")
+    override fun pageListParse(response: Response) = response.asJsoup().let { doc ->
+        doc.selectFirst("#acontent > .center-note")?.run { throw Exception(text()) }
+        val size = PAGE_SIZE_REGEX.find(doc.selectFirst("#atitle")!!.text())!!.groups[1]!!.value
+        val prefix = doc.location().substringBeforeLast("_")
         List(size.toInt()) { i ->
             Page(i, prefix + "${if (i > 0) "_${i + 1}" else ""}.html")
         }

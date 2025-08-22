@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.bilinovel
 
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -38,26 +39,15 @@ private const val SPACING_ADD: Float = 10f
 private const val DIVIDER_HEIGHT: Float = 2f
 private const val DIVIDER_MARGIN: Float = 30f
 
-class HtmlInterceptor(private val baseUrl: String) : Interceptor {
-    // private val imageBuffer = ConcurrentHashMap<String, Drawable>()
+class HtmlInterceptor(
+    private val baseUrl: String,
+    private val pref: SharedPreferences,
+) : Interceptor {
     private val executor = Executors.newFixedThreadPool(4)
 
     companion object {
         val URL_REGEX = Regex("""<img[^>]+src\s*=\s*["']([^"']+)["'][^>]*>""")
-        val BG_COLOR = Color.parseColor("#FAFAF8")
         val DIVIDER_COLOR = Color.parseColor("#E0E0E0")
-        val paintHeading = TextPaint().apply {
-            color = Color.BLACK
-            textSize = HEADING_FONT_SIZE
-            typeface = Typeface.DEFAULT_BOLD
-            isAntiAlias = true
-        }
-        val paintBody = TextPaint().apply {
-            color = Color.BLACK
-            textSize = BODY_FONT_SIZE
-            typeface = Typeface.DEFAULT
-            isAntiAlias = true
-        }
     }
 
     @Suppress("DEPRECATION")
@@ -65,6 +55,21 @@ class HtmlInterceptor(private val baseUrl: String) : Interceptor {
         val request = chain.request()
         val url = request.url
         if (url.host != HtmlInterceptorHelper.HOST) return chain.proceed(request)
+
+        val bgColor = Color.parseColor(pref.getString(PREF_SCREEN_BG_COLOR, "#FAFAF8"))
+        val fontColor = Color.parseColor(pref.getString(PREF_SCREEN_FONT_COLOR, "#000000"))
+        val paintHeading = TextPaint().apply {
+            color = fontColor
+            textSize = HEADING_FONT_SIZE
+            typeface = Typeface.DEFAULT_BOLD
+            isAntiAlias = true
+        }
+        val paintBody = TextPaint().apply {
+            color = fontColor
+            textSize = BODY_FONT_SIZE
+            typeface = Typeface.DEFAULT
+            isAntiAlias = true
+        }
 
         val heading = url.pathSegments[0].takeIf { it.isNotEmpty() }?.let {
             val title = Html.fromHtml(url.pathSegments[0], Html.FROM_HTML_MODE_LEGACY).toString()
@@ -120,13 +125,14 @@ class HtmlInterceptor(private val baseUrl: String) : Interceptor {
         }
 
         // Image building
-        val headingHeight = heading?.height?.plus(Y_PADDING * 2 + DIVIDER_HEIGHT + DIVIDER_MARGIN * 2) ?: 0f
+        val headingHeight =
+            heading?.height?.plus(Y_PADDING * 2 + DIVIDER_HEIGHT + DIVIDER_MARGIN * 2) ?: 0f
         val bodyHeight = body?.height ?: 0
         val imgHeight = (headingHeight + bodyHeight).toInt()
         val bitmap = Bitmap.createBitmap(WIDTH, imgHeight, Bitmap.Config.ARGB_8888)
 
         Canvas(bitmap).apply {
-            drawColor(BG_COLOR)
+            drawColor(bgColor)
             heading?.let {
                 it.draw(this, X_PADDING, Y_PADDING * 2)
                 // 绘制标题下方的分割线
