@@ -85,7 +85,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
 
     private fun handleContent(content: Element, chapterId: Int): String {
         // 1. 计算种子
-        val seed = chapterId * 135 + 236
+        val seed = chapterId * 135 + 234
 
         // 2. 获取所有子节点（包括文本节点等）
         val childNodes = content.children().toMutableList().also {
