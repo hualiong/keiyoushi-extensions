@@ -46,18 +46,98 @@ class BiliNovel : HttpSource(), ConfigurableSource {
 
     // Customize
 
-    private val SManga.id get() = MANGA_ID_REGEX.find(url)!!.groups[1]!!.value
-    private fun String.toHalfWidthDigits(): String {
-        return this.map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
-    }
-
     companion object {
         val DATE_REGEX = Regex("\\d{4}-\\d{1,2}-\\d{1,2}")
         val PAGE_REGEX = Regex("第(\\d+)/(\\d+)页")
         val MANGA_ID_REGEX = Regex("/novel/(\\d+)\\.html")
         val CHAPTER_ID_REGEX = Regex("/novel/\\d+/(\\d+)(?:_\\d+)?\\.html")
         val PAGE_SIZE_REGEX = Regex("（\\d+/(\\d+)）")
+        val EXPRESSION_REGEX = Regex("Number.*?;")
+        val SALT_REGEX = Regex("(?<![a-zA-Z0-9_])-?0x[0-9a-fA-F]+(?:[+*\\-]-?0x[0-9a-fA-F]+)+")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
+    }
+
+    private val salt by lazy {
+        try {
+            val list = mutableListOf<String>()
+            val call = client.newCall(GET("$baseUrl/themes/zhmb/js/chapterlog.js", headers))
+            EXPRESSION_REGEX.findAll(call.execute().body.string()).forEach { m ->
+                SALT_REGEX.findAll(m.value).takeIf { it.count() == 2 }?.forEach { list.add(it.value) }
+            }
+            list.map(::calculate)
+        } catch (_: Exception) {
+            listOf(132, 234)
+        }
+    }
+    private val SManga.id get() = MANGA_ID_REGEX.find(url)!!.groups[1]!!.value
+    private fun String.toHalfWidthDigits(): String {
+        return this.map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
+    }
+
+    private fun calculate(expression: String): Int {
+        var newExpression = expression.replace(" ", "")
+        val hexPattern = Regex("(-?)0x([0-9a-fA-F]+)")
+        newExpression = hexPattern.replace(newExpression) { matchResult ->
+            val sign = matchResult.groupValues[1]
+            val hexStr = matchResult.groupValues[2]
+            var num = hexStr.toLong(16)
+            if (sign == "-") {
+                num = -num
+            }
+            num.toString()
+        }
+        val tokenRegex = Regex("-?\\d+|[+*/-]")
+        val tokens = tokenRegex.findAll(newExpression).map { it.value }.toList()
+        if (tokens.isEmpty()) {
+            return 0
+        }
+        val intermediateTokens = mutableListOf<String>()
+        var index = 0
+        while (index < tokens.size) {
+            val token = tokens[index]
+            if (token == "*" || token == "/") {
+                if (intermediateTokens.isEmpty()) {
+                    throw IllegalArgumentException("Invalid expression: operator without left operand")
+                }
+                val left = intermediateTokens.removeAt(intermediateTokens.size - 1).toInt()
+                if (index + 1 >= tokens.size) {
+                    throw IllegalArgumentException("Invalid expression: operator without right operand")
+                }
+                val right = tokens[index + 1].toInt()
+                if (token == "/" && right == 0) {
+                    throw ArithmeticException("Division by zero")
+                }
+                val result = if (token == "*") left * right else left / right
+                intermediateTokens.add(result.toString())
+                index += 2
+            } else {
+                intermediateTokens.add(token)
+                index++
+            }
+        }
+        if (intermediateTokens.isEmpty()) {
+            return 0
+        }
+        var result = intermediateTokens[0].toInt()
+        index = 1
+        while (index < intermediateTokens.size) {
+            val op = intermediateTokens[index]
+            if (op == "+" || op == "-") {
+                if (index + 1 >= intermediateTokens.size) {
+                    throw IllegalArgumentException("Invalid expression: operator without right operand")
+                }
+                val nextNum = intermediateTokens[index + 1].toInt()
+                if (op == "+") {
+                    result += nextNum
+                } else {
+                    result -= nextNum
+                }
+                index += 2
+            } else {
+                throw IllegalArgumentException("Invalid operator: $op")
+            }
+        }
+        return result
     }
 
     private fun hasNextPage(doc: Document, size: Int): Boolean {
@@ -85,7 +165,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
 
     private fun handleContent(content: Element, chapterId: Int): String {
         // 1. 计算种子
-        val seed = chapterId * 132 + 234
+        val seed = chapterId * salt[0] + salt[1]
 
         // 2. 获取所有子节点（包括文本节点等）
         val childNodes = content.children().toMutableList().also {
