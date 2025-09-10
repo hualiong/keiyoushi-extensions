@@ -6,9 +6,11 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
+import androidx.preference.SwitchPreferenceCompat
 
 const val PREF_POPULAR_DISPLAY = "POPULAR_DISPLAY"
 const val PREF_SCREEN_BG_COLOR = "SCREEN_BG_COLOR"
+const val PREF_DARK_MODE = "DARK_MODE"
 const val PREF_SCREEN_FONT_COLOR = "FONT_COLOR"
 
 val RGB_REGEX = Regex("^#[0-9A-F]{6}$", RegexOption.IGNORE_CASE)
@@ -56,6 +58,7 @@ fun preferencesInternal(context: Context, pref: SharedPreferences): Array<Prefer
             setOnPreferenceChangeListener { _, newValue ->
                 if (RGB_REGEX.matches(newValue as String)) {
                     summary = newValue
+                    Toast.makeText(context, "清除章节缓存后生效", Toast.LENGTH_LONG).show()
                     true
                 } else {
                     Toast.makeText(
@@ -76,6 +79,7 @@ fun preferencesInternal(context: Context, pref: SharedPreferences): Array<Prefer
             setOnPreferenceChangeListener { _, newValue ->
                 if (RGB_REGEX.matches(newValue as String)) {
                     summary = newValue
+                    Toast.makeText(context, "清除章节缓存后生效", Toast.LENGTH_LONG).show()
                     true
                 } else {
                     Toast.makeText(
@@ -85,6 +89,16 @@ fun preferencesInternal(context: Context, pref: SharedPreferences): Array<Prefer
                     ).show()
                     false
                 }
+            }
+        },
+        SwitchPreferenceCompat(context).apply {
+            key = PREF_DARK_MODE
+            title = "深色模式"
+            summary = "开启后，阅读页面的样式将强制使用黑底白字"
+            setDefaultValue(false)
+            setOnPreferenceChangeListener { _, newValue ->
+                Toast.makeText(context, "清除章节缓存后生效", Toast.LENGTH_LONG).show()
+                true
             }
         },
     )

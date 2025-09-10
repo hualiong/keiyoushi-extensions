@@ -56,8 +56,22 @@ class HtmlInterceptor(
         val url = request.url
         if (url.host != HtmlInterceptorHelper.HOST) return chain.proceed(request)
 
-        val bgColor = Color.parseColor(pref.getString(PREF_SCREEN_BG_COLOR, "#FAFAF8"))
-        val fontColor = Color.parseColor(pref.getString(PREF_SCREEN_FONT_COLOR, "#000000"))
+        val darkMode = pref.getBoolean(PREF_DARK_MODE, false)
+        val bgColor = if (darkMode) {
+            Color.BLACK
+        } else {
+            Color.parseColor(
+                pref.getString(PREF_SCREEN_BG_COLOR, "#FAFAF8"),
+            )
+        }
+        val fontColor = if (darkMode) {
+            Color.WHITE
+        } else {
+            Color.parseColor(
+                pref.getString(PREF_SCREEN_FONT_COLOR, "#000000"),
+            )
+        }
+
         val paintHeading = TextPaint().apply {
             color = fontColor
             textSize = HEADING_FONT_SIZE
