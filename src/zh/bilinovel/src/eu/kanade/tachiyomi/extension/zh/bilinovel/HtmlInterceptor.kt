@@ -32,8 +32,6 @@ import java.util.concurrent.TimeUnit
 private const val WIDTH: Int = 1000
 private const val X_PADDING: Float = 50f
 private const val Y_PADDING: Float = 30f
-private const val HEADING_FONT_SIZE: Float = 52f
-private const val BODY_FONT_SIZE: Float = 30f
 private const val SPACING_MULT: Float = 1.0f
 private const val SPACING_ADD: Float = 10f
 private const val DIVIDER_HEIGHT: Float = 2f
@@ -74,13 +72,13 @@ class HtmlInterceptor(
 
         val paintHeading = TextPaint().apply {
             color = fontColor
-            textSize = HEADING_FONT_SIZE
+            textSize = pref.getString(PREF_HEADING_FONT_SIZE, "52.0")!!.toFloat()
             typeface = Typeface.DEFAULT_BOLD
             isAntiAlias = true
         }
         val paintBody = TextPaint().apply {
             color = fontColor
-            textSize = BODY_FONT_SIZE
+            textSize = pref.getString(PREF_BODY_FONT_SIZE, "30.0")!!.toFloat()
             typeface = Typeface.DEFAULT
             isAntiAlias = true
         }
