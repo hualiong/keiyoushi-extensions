@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.zh.bilinovel
 
+import android.util.Log
 import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.interceptor.rateLimit
@@ -54,6 +55,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         val PAGE_SIZE_REGEX = Regex("（\\d+/(\\d+)）")
         val EXPRESSION_REGEX = Regex("Number.*?;")
         val SALT_REGEX = Regex("(?<![a-zA-Z0-9_])-?0x[0-9a-fA-F]+(?:[+*\\-]-?0x[0-9a-fA-F]+)+")
+        val URL_REGEX = Regex("/themes/zhmb/js/chapterlog\\.js\\?v[^\"]+")
         val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.CHINESE)
         val TRADITIONAL_CHARACTER_MAP = mapOf<Char, Char>(
             '皑' to '皚', '蔼' to '藹', '碍' to '礙', '爱' to '愛', '翱' to '翺', '袄' to '襖',
@@ -276,14 +278,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         )
     }
 
-    private val salt by lazy {
-        val list = mutableListOf<String>()
-        val call = client.newCall(GET("$baseUrl/themes/zhmb/js/chapterlog.js", headers))
-        EXPRESSION_REGEX.findAll(call.execute().body.string()).forEach { m ->
-            SALT_REGEX.findAll(m.value).takeIf { it.count() == 2 }?.forEach { list.add(it.value) }
-        }
-        list.map(::calculate)
-    }
+    private var salt: Pair<Int, Int>? = null
     private val SManga.id get() = MANGA_ID_REGEX.find(url)!!.groups[1]!!.value
     private fun String.toHalfWidthDigits(): String {
         return this.map { if (it in '０'..'９') it - 65248 else it }.joinToString("")
@@ -299,6 +294,22 @@ class BiliNovel : HttpSource(), ConfigurableSource {
             this.map { c -> TRADITIONAL_CHARACTER_MAP[c] ?: c }.joinToString("")
         } else {
             this
+        }
+    }
+
+    private fun parseSalt(url: String) {
+        var s1 = 0
+        var s2 = 0
+        val resp = client.newCall(GET(url, headers)).execute()
+        EXPRESSION_REGEX.findAll(resp.body.string()).forEach { m ->
+            SALT_REGEX.findAll(m.value).takeIf { it.count() == 2 }?.let {
+                s1 = calculate(it.first().value)
+                s2 = calculate(it.last().value)
+            }
+        }
+        salt = Pair(s1, s2).apply {
+            val version = url.substringAfter("?")
+            Log.v("BiliNovel", "chapterlog: $version, salt1: $first, salt2: $second")
         }
     }
 
@@ -393,7 +404,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
 
     private fun sort(content: Element, chapterId: Int): String {
         // 1. 计算种子
-        val seed = chapterId * salt[0] + salt[1]
+        val seed = chapterId * salt!!.first + salt!!.second
 
         // 2. 获取所有子节点（包括文本节点等）
         val childNodes = content.children().toMutableList().also {
@@ -567,6 +578,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
     // Image
 
     override fun imageUrlParse(response: Response) = response.asJsoup().let { doc ->
+        if (salt == null) parseSalt(baseUrl + URL_REGEX.find(doc.body().toString())!!.value)
         val switch = pref.getBoolean(PREF_DISPLAY_TRADITIONAL, false)
         val title = doc.selectFirst("#atitle")?.html()?.takeIf { it.indexOf("/") < 0 } ?: ""
         val content = doc.selectFirst("#acontent")!!

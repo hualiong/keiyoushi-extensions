@@ -21,7 +21,6 @@ import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.ByteArrayOutputStream
-import java.io.InputStream
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
@@ -184,33 +183,28 @@ class HtmlInterceptor(
      * 加载单个图片
      */
     private fun loadImage(url: String): Drawable {
-        // 检查缓存
-        // if (imageBuffer.containsKey(url)) {
-        //     return imageBuffer[url]!!
-        // }
-
         val connection = URL(url).openConnection().apply {
             setRequestProperty("Referer", baseUrl)
             connectTimeout = 10000
             readTimeout = 10000
         }
+        try {
+            val inputStream = connection.getInputStream()
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
 
-        val inputStream: InputStream = connection.getInputStream()
-        val bitmap = BitmapFactory.decodeStream(inputStream)
-        inputStream.close()
+            // 计算适合文本宽度的图片尺寸
+            val scaledWidth = WIDTH - (2 * X_PADDING).toInt()
+            val scaleFactor = scaledWidth.toFloat() / bitmap.width
+            val scaledHeight = (bitmap.height * scaleFactor).toInt()
 
-        // 计算适合文本宽度的图片尺寸
-        val scaledWidth = WIDTH - (2 * X_PADDING).toInt()
-        val scaleFactor = scaledWidth.toFloat() / bitmap.width
-        val scaledHeight = (bitmap.height * scaleFactor).toInt()
-
-        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
-        val drawable = BitmapDrawable(null, scaledBitmap)
-        drawable.setBounds(0, 0, scaledWidth, scaledHeight)
-
-        // 缓存图片
-        // imageBuffer[url] = drawable
-        return drawable
+            val scaledBitmap = Bitmap.createScaledBitmap(bitmap, scaledWidth, scaledHeight, true)
+            return BitmapDrawable(null, scaledBitmap).apply {
+                setBounds(0, 0, scaledWidth, scaledHeight)
+            }
+        } catch (_: Exception) {
+            return createPlaceholder()
+        }
     }
 
     /**
@@ -222,11 +216,39 @@ class HtmlInterceptor(
 
         val placeholder = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(placeholder)
+
+        // 绘制背景色
         canvas.drawColor(Color.parseColor("#EEEEEE"))
 
-        val drawable = BitmapDrawable(null, placeholder)
-        drawable.setBounds(0, 0, width, height)
-        return drawable
+        // 创建文字画笔
+        val textPaint = TextPaint().apply {
+            color = Color.parseColor("#999999")
+            textSize = 36f
+            typeface = Typeface.DEFAULT
+            isAntiAlias = true
+            textAlign = Paint.Align.CENTER
+        }
+
+        // 计算文字位置（水平垂直居中）
+        val text = "插图加载失败"
+        val x = width / 2f
+        val y = height / 2f - (textPaint.descent() + textPaint.ascent()) / 2f
+
+        // 绘制文字
+        canvas.drawText(text, x, y, textPaint)
+
+        // 可选：添加边框
+        // val borderPaint = Paint().apply {
+        //     color = Color.parseColor("#CCCCCC")
+        //     style = Paint.Style.STROKE
+        //     strokeWidth = 2f
+        //     isAntiAlias = true
+        // }
+        // canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), borderPaint)
+
+        return BitmapDrawable(null, placeholder).apply {
+            setBounds(0, 0, width, height)
+        }
     }
 
     private fun StaticLayout.draw(canvas: Canvas, x: Float, y: Float) {
