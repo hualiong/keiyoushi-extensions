@@ -570,7 +570,7 @@ class BiliNovel : HttpSource(), ConfigurableSource {
         doc.selectFirst("#acontent > .center-note")?.run { throw Exception(text()) }
         val size = PAGE_SIZE_REGEX.find(doc.selectFirst("#atitle")!!.text())!!.groups[1]!!.value
         val prefix = doc.location().substringBeforeLast("_")
-        List(size.toInt()) { i ->
+        List(size.toInt().takeUnless { it == 0 } ?: 1) { i ->
             Page(i, prefix + "${if (i > 0) "_${i + 1}" else ""}.html")
         }
     }
