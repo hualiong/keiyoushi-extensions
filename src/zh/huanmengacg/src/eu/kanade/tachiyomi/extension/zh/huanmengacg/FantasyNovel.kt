@@ -70,9 +70,9 @@ class FantasyNovel : HttpSource(), ConfigurableSource {
                 title = img.attr("alt")
             }
         }
-        val current = response.request.url.pathSegments.last()
+        val current = response.request.url.pathSegments.last().toIntOrNull() ?: 0
         val total = doc.selectFirst(".pagination > a:nth-last-child(2)")?.text()
-        MangasPage(mangas, current.toInt() < (total?.toInt() ?: 0))
+        MangasPage(mangas, current < (total?.toInt() ?: 0))
     }
 
     // Latest Page
@@ -129,7 +129,7 @@ class FantasyNovel : HttpSource(), ConfigurableSource {
         val info = doc.select(".book-metas").last()?.text()?.substring(3)
         val date = DATE_FORMAT.tryParse(info?.let { DATE_REGEX.find(it) }?.value)
         val chapters = doc.select("#chapterlist a")
-        chapters.mapIndexed { i, e ->
+        chapters.map { e ->
             val text = e.text()
             SChapter.create().apply {
                 name = text.substringAfter(" ").trim()

@@ -115,7 +115,7 @@ class HtmlInterceptor(
                 }
 
                 // 设置超时时间，避免无限等待
-                if (!latch.await(imageUrls.size * 3L, TimeUnit.SECONDS)) {
+                if (!latch.await(30L.coerceAtLeast(imageUrls.size * 10L), TimeUnit.SECONDS)) {
                     Log.w("TextInterceptor", "Timeout waiting for images to load")
                 }
             }
@@ -186,8 +186,8 @@ class HtmlInterceptor(
     private fun loadImage(url: String): Drawable {
         val connection = URL(url).openConnection().apply {
             setRequestProperty("Referer", baseUrl)
-            connectTimeout = 10000
-            readTimeout = 10000
+            connectTimeout = 20000
+            readTimeout = 20000
         }
         try {
             val inputStream = connection.getInputStream()
