@@ -114,7 +114,7 @@ class HtmlInterceptor(
 
                 // 设置超时时间，避免无限等待
                 if (!latch.await(30, TimeUnit.SECONDS)) {
-                    Log.w("TextInterceptor", "Timeout waiting for images to load")
+                    Log.w("HtmlInterceptor", "Timeout waiting for images to load")
                 }
             }
             val spanned = Html.fromHtml(
@@ -183,7 +183,8 @@ class HtmlInterceptor(
      * 加载单个图片
      */
     private fun loadImage(url: String): Drawable {
-        val connection = URL(url).openConnection().apply {
+        val raw = if (url.startsWith("//")) URL("https:$url") else URL(url)
+        val connection = raw.openConnection().apply {
             setRequestProperty("Referer", baseUrl)
             connectTimeout = 10000
             readTimeout = 10000
