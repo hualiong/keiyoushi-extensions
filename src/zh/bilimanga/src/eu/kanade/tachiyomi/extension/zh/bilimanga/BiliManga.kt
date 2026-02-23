@@ -22,9 +22,7 @@ import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BiliManga :
-    HttpSource(),
-    ConfigurableSource {
+class BiliManga : HttpSource(), ConfigurableSource {
 
     override val baseUrl = "https://www.bilimanga.net"
 
@@ -36,17 +34,19 @@ class BiliManga :
 
     private val preferences by getPreferencesLazy()
 
-    override val client = super.client.newBuilder()
-        .rateLimit(10, 10).addNetworkInterceptor(MangaInterceptor()).build()
+    override fun setupPreferenceScreen(screen: PreferenceScreen) {
+        preferencesInternal(screen.context, preferences).forEach(screen::addPreference)
+    }
+
+    override val client = super.client.newBuilder().also {
+        val split = preferences.getString(PREF_RATE_LIMIT, "10/10")!!.split("/")
+        it.rateLimit(split[0].toInt(), split[1].toLong())
+    }.addNetworkInterceptor(MangaInterceptor()).build()
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
         .add("Accept-Language", "zh")
         .add("Accept", "*/*")
-
-    override fun setupPreferenceScreen(screen: PreferenceScreen) {
-        preferencesInternal(screen.context).forEach(screen::addPreference)
-    }
 
     // Customize
 
