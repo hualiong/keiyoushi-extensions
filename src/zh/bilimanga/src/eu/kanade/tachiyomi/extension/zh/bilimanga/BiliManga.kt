@@ -22,7 +22,9 @@ import org.jsoup.select.Elements
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class BiliManga : HttpSource(), ConfigurableSource {
+class BiliManga :
+    HttpSource(),
+    ConfigurableSource {
 
     override val baseUrl = "https://www.bilimanga.net"
 
@@ -43,10 +45,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
         it.rateLimit(split[0].toInt(), split[1].toLong())
     }.addNetworkInterceptor(MangaInterceptor()).build()
 
-    override fun headersBuilder() = super.headersBuilder()
-        .add("Referer", "$baseUrl/")
-        .add("Accept-Language", "zh")
-        .add("Accept", "*/*")
+    override fun headersBuilder() = super.headersBuilder().add("Referer", "$baseUrl/").add("Accept-Language", "zh").add("Accept", "*/*")
 
     // Customize
 
@@ -138,8 +137,7 @@ class BiliManga : HttpSource(), ConfigurableSource {
         val doc = response.asJsoup()
         val meta = doc.selectFirst(".book-meta")!!.text().split("|")
         val extra = meta.filterNot(META_REGEX::containsMatchIn)
-        val bkname =
-            doc.selectFirst(".backupname")?.let { "**別名**：${it.text()}\n\n---\n\n" } ?: ""
+        val bkname = doc.selectFirst(".backupname")?.let { "**別名**：${it.text()}\n\n---\n\n" } ?: ""
         setUrlWithoutDomain(doc.location())
         title = doc.selectFirst(".book-title")!!.text()
         thumbnail_url = doc.selectFirst(".book-cover")!!.attr("src")
